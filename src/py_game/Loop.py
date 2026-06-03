@@ -2,9 +2,11 @@ import pygame
 from dataclasses import dataclass, field
 from collections.abc import Callable
 from BasicGeometry.BasicGeometry import AABB, Vec2
-from SpatialPartitioners.Quadtree.QuadtreeNode import QuadtreeNode
 
 from typing import TYPE_CHECKING
+
+# Diese Klasse ist dafür da ein visuelles Flipbook der Parittionierungsmethoden zu erschaffen
+
 
 if TYPE_CHECKING:
     from AABBDistribution.AABBDistribution import AABBDistribution
@@ -24,32 +26,16 @@ DEFAULT_NODE_BOUND_COLOR = (255, 0, 0) # Red
 
 from distinctipy import distinctipy
 
-def generate_pygame_colors(n: int) -> list[tuple[int, int, int]]:
-    """Generates n different colors that are as different as possible"""
-    colors_float = distinctipy.get_colors(n)
 
-    return [
-        (
-            int(r * 255),
-            int(g * 255),
-            int(b * 255),
-        )
-        for r, g, b in colors_float
-    ]
 
 @dataclass
 class Loop:
     running: bool = False
-    eventCallbacks: list[Callable[["Loop", pygame.event.Event], None]] = field(default_factory=list)
 
-    # This flag determines whether bounding boxes or objects are drawn first:
-    objectsInBackground: bool = True
-
-    # This vector value gets added onto everything that is displayed, such that the simulation is centered in the window
+    # The offset vector value gets added onto everything that is displayed, such that the simulation is centered in the window
     # We calculate the actual offset in centerSimulationInWindow()
     # The offset can not be precomputed, as simulation size is dynamic and we do not want to have tight coupeling between the classes.
     offset: Vec2 = field(default_factory=Vec2)
-    colors: list[tuple[int, int, int]] = field(default_factory=list)
     
     # This function is needed to AABB -> pygame.Rect
     @staticmethod
@@ -70,7 +56,7 @@ class Loop:
     objects: list[AABB] = field(default_factory=list)
 
     # The state Chain is traversable like a flipbook.
-    stateChain: list[QuadtreeNode | AABB] = field(default_factory=list)
+    stateChain: list[AABB] = field(default_factory=list)
     # The index is mutated in the .run() method, to enable flip book like behaviour
     indexInStateChain: int = 0
 
@@ -80,21 +66,16 @@ class Loop:
         self.screen: pygame.Surface = pygame.display.set_mode(WINDOW_SIZE)
         self.clock: pygame.time.Clock = pygame.time.Clock()
 
-    
-    def addCallback(self, callback: Callable[["Loop", pygame.event.Event], None]):
-        self.eventCallbacks.append(callback)
 
-    def addNodes(self, nodes: QuadtreeNode | AABB) -> None:
-        self.objects.append(nodes)
+    def addObject(self, obj: AABB) -> None:
+        self.objects.append(obj)
 
-    def addNodeToFlipbook(self, node: QuadtreeNode) -> None:
+    def addNodeBoundToFlipbook(self, node: AABB) -> None:
         """Later you can look at the state changes like a flipbook"""
-        self.stateChain.append(node.bounds)
+        self.stateChain.append(node)
             
-
     
     def run(self):
-        self.colors = generate_pygame_colors(len(self.stateChain)) # For each node bound we want to have a different color
         self.running: bool = True
         while self.running:
             # 1. Handling events
@@ -108,8 +89,6 @@ class Loop:
                     if event.key == pygame.K_RIGHT: # Right arrow key, flip the flibook to the front
                         if self.indexInStateChain < len(self.stateChain):
                             self.indexInStateChain += 1
-                for eventCallback in self.eventCallbacks:
-                    eventCallback(self, event)
             
             # 2. Update state
             # No need for that, as we collected all state before calling .run()
@@ -117,24 +96,13 @@ class Loop:
             # 3. Clear screen
             self.screen.fill((30, 30, 30))
 
-            # 4. Draw stuff
-            if self.objectsInBackground:
-                # Draw all the constant objects:
-                for obj in self.objects:
-                    self.drawObjWithOffset(obj)
-                # Draw all the things in the flipbook up to the current index
-                for i in range(0, self.indexInStateChain):
-                    node: QuadtreeNode | AABB = self.stateChain[i]
-                    self.drawNodeWithOffset(node, color=self.colors[i])
-            elif not self.objectsInBackground:
-                # Draw all the things in the flipbook up to the current index
-                for i in range(0, self.indexInStateChain):
-                    node: QuadtreeNode | AABB = self.stateChain[i]
-                    self.drawNodeWithOffset(node, color=self.colors[i])
-
-                # Draw all the constant objects:
-                for obj in self.objects:
-                    self.drawObjWithOffset(obj)
+            # Draw all the constant objects:
+            for obj in self.objects:
+                self.drawObjWithOffset(obj)
+            # Draw all the things in the flipbook up to the current index
+            for i in range(0, self.indexInStateChain):
+                nodeBound: AABB = self.stateChain[i]
+                self.drawNodeBoundWithOffset(nodeBound)
 
             # 5. Present state:
             pygame.display.flip()
@@ -142,25 +110,13 @@ class Loop:
 
         pygame.quit()
 
-    def drawObjWithOffset(self, node: QuadtreeNode | AABB) -> None:
-        converted: AABB = None
-        if isinstance(node, AABB):
-            converted = node
-        elif isinstance(node, QuadtreeNode):
-            converted = node.bounds
-
-        rect = self.aabbToPygameRect(converted, self.offset)
+    def drawObjWithOffset(self, obj: AABB) -> None:
+        rect = self.aabbToPygameRect(obj, self.offset)
         pygame.draw.rect(self.screen, DEFAULT_OBJECT_COLOR, rect, width=0)
 
-    def drawNodeWithOffset(self, node: QuadtreeNode | AABB, color: tuple[int, int, int]) -> None:
-        converted: AABB = None
-        if isinstance(node, AABB):
-            converted = node
-        elif isinstance(node, QuadtreeNode):
-            converted = node.bounds
-    
-        rect = self.aabbToPygameRect(converted, self.offset)
-        pygame.draw.rect(self.screen, color, rect, width=3)
+    def drawNodeBoundWithOffset(self, obj: AABB) -> None:
+        rect = self.aabbToPygameRect(obj, self.offset)
+        pygame.draw.rect(self.screen, DEFAULT_NODE_BOUND_COLOR, rect, width=3)
 
     def centerSimulationInWinow(self, simulation: "AABBDistribution"):
         simulation_center: Vec2 = simulation.calculateSimulationCenter()

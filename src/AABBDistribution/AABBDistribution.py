@@ -23,7 +23,7 @@ class AABBDistribution:
             )
 
             self.samples.append(particle)
-            loopSingleton.addNodes(particle)
+            loopSingleton.addObject(particle)
         
         self.simulation_center: Vec2 = self.calculateSimulationCenter()
 

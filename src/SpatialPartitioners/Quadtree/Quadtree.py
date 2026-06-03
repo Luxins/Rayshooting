@@ -73,7 +73,7 @@ class Quadtree:
         # The node itself is already fully defined, just the kids aren't yet.
         # To keep the order of display, we can already add it to the flipbook
 
-        loopSingleton.addNodeToFlipbook(node) #... This test verified, that the quadtree construction works
+        loopSingleton.addNodeBoundToFlipbook(node.bounds) #... This test verified, that the quadtree construction works
         
 
         node.setChildren(
@@ -91,6 +91,10 @@ class Quadtree:
         metadata: str = f"Number of Nodes:\t{len(self.nodes)}\nRoot Node bounds:\n{indent(self.nodes[0].bounds.__str__(), '\t')}"
         node_data: str = "\n\n".join(str(node) for node in self.nodes)
         return f"{metadata}\n\n{node_data}"
+    
+    ### Ab hier folgen nun die Methoden für die Query ###
+    ### Gegeben eine Ray, wollen wir so schnell wie möglich alle Partitionen des Quadtrees zurückgeben,
+    ### die von der Ray getroffen werden
     
 
 
