@@ -8,3 +8,4 @@ if __name__ == "__main__":
      # Weil wir zerlegen ja den Raum an sich und nicht die Menge der Partikel wie bei den BVH
     scene: AABBDistribution = AABBDistribution(20)
     tree: Quadtree = Quadtree(scene, layers=QUADTREE_LAYERS)
+    

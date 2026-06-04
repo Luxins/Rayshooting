@@ -11,6 +11,12 @@ class Vec2:
             self.x - other.x,
             self.y - other.y
         )
+    
+    def __add__(self, other: "Vec2")-> "Vec2":
+        return Vec2(
+            self.x + other.x,
+            self.y + other.y
+        ) 
 
     def __mul__(self, other: float)-> "Vec2":
         return Vec2(
@@ -31,6 +37,13 @@ class AABB:
     min: Vec2
     max: Vec2
     
+    def containsPoint(self, point: Vec2)-> bool:
+        return (
+            self.min.x <= point.x and
+            self.max.x >= point.x and
+            self.min.y <= point.y and
+            self.max.y >= point.y
+        )
 
     @property
     def center(self)-> Vec2:

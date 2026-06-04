@@ -70,8 +70,10 @@ class Loop:
     def addObject(self, obj: AABB) -> None:
         self.objects.append(obj)
 
-    def addNodeBoundToFlipbook(self, node: AABB) -> None:
+    def addNodeBoundToFlipbook(self, node: AABB, skip: bool) -> None:
         """Later you can look at the state changes like a flipbook"""
+        # skip means that we flip ahead right away when encountering the flipbook page
+        node.skip = skip
         self.stateChain.append(node)
             
     
@@ -90,6 +92,11 @@ class Loop:
                         if self.indexInStateChain < len(self.stateChain):
                             self.indexInStateChain += 1
             
+            # If we are in a skipable range of the stateChain, increase the index up until the objects are no longer skipable
+            while self.indexInStateChain < len(self.stateChain) and self.stateChain[self.indexInStateChain].skip:
+                self.indexInStateChain += 1
+
+
             # 2. Update state
             # No need for that, as we collected all state before calling .run()
 

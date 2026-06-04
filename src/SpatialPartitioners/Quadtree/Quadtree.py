@@ -3,6 +3,7 @@ from BasicGeometry.BasicGeometry import Vec2, AABB
 from SpatialPartitioners.Quadtree.QuadtreeNode import QuadtreeNode
 import pygame
 from py_game.Loop import loopSingleton
+from Ray.Ray import Ray, RayHit
 
 from textwrap import indent
 
@@ -73,7 +74,7 @@ class Quadtree:
         # The node itself is already fully defined, just the kids aren't yet.
         # To keep the order of display, we can already add it to the flipbook
 
-        loopSingleton.addNodeBoundToFlipbook(node.bounds) #... This test verified, that the quadtree construction works
+        loopSingleton.addNodeBoundToFlipbook(node.bounds, skip=True) #... This test verified, that the quadtree construction works
         
 
         node.setChildren(
@@ -95,12 +96,37 @@ class Quadtree:
     ### Ab hier folgen nun die Methoden für die Query ###
     ### Gegeben eine Ray, wollen wir so schnell wie möglich alle Partitionen des Quadtrees zurückgeben,
     ### die von der Ray getroffen werden
-    
 
+    def shootRay(self, ray: Ray)-> list[RayHit]:
+        # Our shoot Ray is breadth first centered
+        queue: list[QuadtreeNode] = [self.nodes[0]]
+
+        containsOrign: list[QuadtreeNode] = self.listNodesWithOrigin(ray)
+
+        # Alle Elemente in der Queue sind von der gleichen Quadtree-Ebene
+        # Wir wollen nach jenen filtern, die von der Ray getroffen werden.
+        # Dafür müssen wir als erstes die Leaf-Partition finden, in der sich der origin der Ray befindet
+            
+            
+        
+
+    def listNodesWithOrigin(self, ray: Ray)-> list[QuadtreeNode]:
+        containsOrigin: list[QuadtreeNode] = [] # Auf jeder Ebene wollen wir tracken, welche Node den Origin der Ray enthält. containsOrigin[0] ist die Node der 1-ten Ebene, containsOrign[1] der 2-ten Ebene usw....
+        # Unser erstes Zweig traversal O(log n) ist nur dafür da, containsOrigin zu füllen
+        # Das Zweig traveral ist also eine Art greedy depth first
+        stack: list[QuadtreeNode] = [self.nodes[0]]
+        while stack:
+            nodeWithOrigin: QuadtreeNode = stack.pop()
+            containsOrigin.append(nodeWithOrigin)
+            children: list[QuadtreeNode] = [self.nodes[nodeIndex] for nodeIndex in nodeWithOrigin.children]
+            for child in children:
+                if child.bounds.containsPoint(ray.origin):
+                    stack.append(child)
+        
+        return containsOrigin
 
 if __name__ == '__main__':
     
-
     # Sufficent test for checking that Quadtree construction works!
 
     scene: AABBDistribution = AABBDistribution(20)
@@ -108,6 +134,19 @@ if __name__ == '__main__':
     # for sample in scene.samples:
     #     print(sample, '\n')
     tree: Quadtree = Quadtree(scene, 3)
+    
+    # rootBounds: AABB = tree.nodes[0].bounds
+    # ray: Ray = Ray(
+    #     origin=Vec2(
+    #         x=rootBounds.min.x + 0.5, 
+    #         y=rootBounds.min.y + 0.5
+    #     ),
+    #     direction=Vec2(
+    #         0,0
+    #     )
+    # )
+    # tree.listNodesWithOrigin(ray)
+
     # print(tree)
     loopSingleton.objectsInBackground = False
     loopSingleton.run()
