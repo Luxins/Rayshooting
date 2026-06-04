@@ -37,6 +37,10 @@ class AABB:
     min: Vec2
     max: Vec2
     
+    # Further attributes for rendering:
+    skip: bool = False # Skips the object placement step in the flipbook
+    shade: bool = False # Draws the given object with an opaque fill
+
     def containsPoint(self, point: Vec2)-> bool:
         return (
             self.min.x <= point.x and

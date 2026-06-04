@@ -134,19 +134,23 @@ if __name__ == '__main__':
     # for sample in scene.samples:
     #     print(sample, '\n')
     tree: Quadtree = Quadtree(scene, 3)
+    rootX, rootY = tree.nodes[0].bounds.min.x, tree.nodes[0].bounds.min.y
+
+    ray: Ray = Ray(
+        origin=Vec2(
+            x=rootX + 30, 
+            y=rootY + 30
+        ),
+        direction=Vec2(
+            0,0
+        )
+    )
+
+    loopSingleton.addPoint(ray.origin)
     
-    # rootBounds: AABB = tree.nodes[0].bounds
-    # ray: Ray = Ray(
-    #     origin=Vec2(
-    #         x=rootBounds.min.x + 0.5, 
-    #         y=rootBounds.min.y + 0.5
-    #     ),
-    #     direction=Vec2(
-    #         0,0
-    #     )
-    # )
-    # tree.listNodesWithOrigin(ray)
+    nodesWithOrigin: list[QuadtreeNode] = tree.listNodesWithOrigin(ray)
+    nodesWithOrigin[-1].bounds.shade = True
+
 
     # print(tree)
-    loopSingleton.objectsInBackground = False
     loopSingleton.run()

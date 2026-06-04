@@ -23,6 +23,10 @@ WINDOW_CENTER: Vec2 = Vec2(
 FRAME_RATE: int = 60
 DEFAULT_OBJECT_COLOR = (255, 255, 255) # White
 DEFAULT_NODE_BOUND_COLOR = (255, 0, 0) # Red
+DEFAULT_CIRCLE_COLOR = (0, 255, 0) # Green
+
+DEFAULT_NODE_FILL_COLOR = (100, 180, 255, 60)  # RGBA, alpha: 0 transparent, 255 opaque
+
 
 from distinctipy import distinctipy
 
@@ -55,6 +59,8 @@ class Loop:
     # The objects will always be rendered and can not be flipped like a flipbook:
     objects: list[AABB] = field(default_factory=list)
 
+    points: list[Vec2] = field(default_factory=list)
+
     # The state Chain is traversable like a flipbook.
     stateChain: list[AABB] = field(default_factory=list)
     # The index is mutated in the .run() method, to enable flip book like behaviour
@@ -69,6 +75,9 @@ class Loop:
 
     def addObject(self, obj: AABB) -> None:
         self.objects.append(obj)
+    
+    def addPoint(self, point: Vec2)-> None:
+        self.points.append(point)
 
     def addNodeBoundToFlipbook(self, node: AABB, skip: bool) -> None:
         """Later you can look at the state changes like a flipbook"""
@@ -110,12 +119,23 @@ class Loop:
             for i in range(0, self.indexInStateChain):
                 nodeBound: AABB = self.stateChain[i]
                 self.drawNodeBoundWithOffset(nodeBound)
+            
+            # Draw all the points (e.g. ray origins):
+            for point in self.points:
+                self.drawCircleWithOffset(point)
 
             # 5. Present state:
             pygame.display.flip()
             self.clock.tick(60)
 
         pygame.quit()
+    
+    def drawCircleWithOffset(self, center: Vec2) -> None:
+        # First of all converting the logical coordinates to pygame...
+        converted: Vec2 = center * SIMULATION_SCAlAR + self.offset
+        left: int = round(converted.x)
+        top: int = round(converted.y)
+        pygame.draw.circle(self.screen, DEFAULT_CIRCLE_COLOR, (left, top), radius=5)
 
     def drawObjWithOffset(self, obj: AABB) -> None:
         rect = self.aabbToPygameRect(obj, self.offset)
@@ -123,6 +143,15 @@ class Loop:
 
     def drawNodeBoundWithOffset(self, obj: AABB) -> None:
         rect = self.aabbToPygameRect(obj, self.offset)
+        if obj.shade:
+            # Create transparent surface with same size as rect
+            fill_surface = pygame.Surface(rect.size, pygame.SRCALPHA)
+
+            # Fill the local surface
+            fill_surface.fill(DEFAULT_NODE_FILL_COLOR)
+
+            # Draw transparent fill onto screen
+            self.screen.blit(fill_surface, rect.topleft)
         pygame.draw.rect(self.screen, DEFAULT_NODE_BOUND_COLOR, rect, width=3)
 
     def centerSimulationInWinow(self, simulation: "AABBDistribution"):
