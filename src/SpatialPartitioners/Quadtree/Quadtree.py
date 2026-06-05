@@ -1,11 +1,17 @@
 from AABBDistribution.AABBDistribution import AABBDistribution
 from BasicGeometry.BasicGeometry import Vec2, AABB
-from SpatialPartitioners.Quadtree.QuadtreeNode import QuadtreeNode
+from SpatialPartitioners.Quadtree.QuadtreeNode import QuadtreeNode, TraversalItem
 import pygame
 from py_game.Loop import loopSingleton
-from Ray.Ray import Ray, RayHit
+from Ray.Ray import Ray, RayHit, RayInterval, intersect
+from collections import deque
 
 from textwrap import indent
+
+from dataclasses import dataclass
+from typing import Optional
+
+
 
 class Quadtree:
     def __init__(self, scene: AABBDistribution, layers: int = 1):
@@ -98,15 +104,74 @@ class Quadtree:
     ### die von der Ray getroffen werden
 
     def shootRay(self, ray: Ray)-> list[RayHit]:
-        # Our shoot Ray is breadth first centered
-        queue: list[QuadtreeNode] = [self.nodes[0]]
+        # Das resultat von Shoot Ray ist eine liste an RayHits (Partition + Zeitinterval der Intersektion)
+        res: list[RayHit] = []
+        # shootRay basiert auf breadth-first;
+        # Auf jeder Ebene filtern wir nach Nodes, die intersected werden
+        # und betrachten nur diese Subtrees weiter.
+        root: QuadtreeNode = self.nodes[0]
+        queue: deque[TraversalItem] = deque()
 
-        containsOrign: list[QuadtreeNode] = self.listNodesWithOrigin(ray)
+        # Als erstes prüfen wir auf welchem Intervall (bezüglich t) die Ray mit der root intersected.
+        # Wir brauchen dabei sowohl einen boolean (intersected die Ray) als auch die Intervalgrenzen.
+        # Constructen wir einmal formel das RayInterval für die gesamte Ray:
+        
+        rootIntersected, rootIntersectedInterval = intersect( # Die intersect Funktion wurde unter BasicGeometry implementiert.
+            root.bounds,
+            ray,
+            RayInterval(
+                0.0,
+                float('inf')
+            )
+        )
 
-        # Alle Elemente in der Queue sind von der gleichen Quadtree-Ebene
-        # Wir wollen nach jenen filtern, die von der Ray getroffen werden.
-        # Dafür müssen wir als erstes die Leaf-Partition finden, in der sich der origin der Ray befindet
+        if not rootIntersected:
+            # If the root wasn't intersected nothing else will be
+            return []
+        
+        # Crafting the first traversal item in the queue:
+
+        queue.append(
+            TraversalItem(
+                node=root,
+                interval=rootIntersectedInterval
+            )
+        )
+
+        while queue:
+            traversalItem: TraversalItem = queue.popleft()
             
+            childrenIndices: list[int] = traversalItem.node.children
+            
+            children: list[QuadtreeNode] = [self.nodes[childIndex] for childIndex in childrenIndices]
+            
+            # Wenn die node keine children hat, ist sie leaf.
+            # Ein geschnittenes Leaf recorden wir für den Return.
+            if traversalItem.node.isLeaf():
+                res.append(
+                    RayHit(
+                        partition=traversalItem.node.bounds,
+                        t_enter=traversalItem.interval.t_enter,
+                        t_exit=traversalItem.interval.t_exit
+                    )
+                )
+
+            # Jedes Child, was mit der Ray schneidet, kommt wieder in die Queue:
+            # Wir brauche jedoch das IntersectionInterval des parents für den Call
+
+            for child in children:
+                childIntersect, childIntersectInterval = intersect(child.bounds, ray=ray, rayInterval=traversalItem.interval)
+                if childIntersect:
+                    # Baue das neue traversal item:
+                    childTraversalItem = TraversalItem(
+                        child, childIntersectInterval
+                    )
+                    queue.append(childTraversalItem)
+        
+        res.sort(key=lambda hit: hit.t_enter)
+        return res
+
+
             
         
 
@@ -142,11 +207,15 @@ if __name__ == '__main__':
             y=rootY + 30
         ),
         direction=Vec2(
-            0,0
+            1,1
         )
     )
 
-    loopSingleton.addPoint(ray.origin)
+    leafPartitionsHit: list[RayHit] = tree.shootRay(ray)
+    for hit in leafPartitionsHit:
+        hit.partition.shade = True
+
+    loopSingleton.addRay(ray)
     
     nodesWithOrigin: list[QuadtreeNode] = tree.listNodesWithOrigin(ray)
     nodesWithOrigin[-1].bounds.shade = True

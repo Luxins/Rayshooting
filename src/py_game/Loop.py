@@ -1,7 +1,8 @@
 import pygame
 from dataclasses import dataclass, field
 from collections.abc import Callable
-from BasicGeometry.BasicGeometry import AABB, Vec2
+from BasicGeometry.BasicGeometry import AABB, Vec2, VecInt2
+from Ray.Ray import Ray
 
 from typing import TYPE_CHECKING
 
@@ -24,6 +25,7 @@ FRAME_RATE: int = 60
 DEFAULT_OBJECT_COLOR = (255, 255, 255) # White
 DEFAULT_NODE_BOUND_COLOR = (255, 0, 0) # Red
 DEFAULT_CIRCLE_COLOR = (0, 255, 0) # Green
+DEFAULT_LINE_COLOR = (150, 0, 40) # Some color...
 
 DEFAULT_NODE_FILL_COLOR = (100, 180, 255, 60)  # RGBA, alpha: 0 transparent, 255 opaque
 
@@ -59,7 +61,7 @@ class Loop:
     # The objects will always be rendered and can not be flipped like a flipbook:
     objects: list[AABB] = field(default_factory=list)
 
-    points: list[Vec2] = field(default_factory=list)
+    rays: list[Ray] = field(default_factory=list)
 
     # The state Chain is traversable like a flipbook.
     stateChain: list[AABB] = field(default_factory=list)
@@ -76,8 +78,8 @@ class Loop:
     def addObject(self, obj: AABB) -> None:
         self.objects.append(obj)
     
-    def addPoint(self, point: Vec2)-> None:
-        self.points.append(point)
+    def addRay(self, ray: Ray)-> None:
+        self.rays.append(ray)
 
     def addNodeBoundToFlipbook(self, node: AABB, skip: bool) -> None:
         """Later you can look at the state changes like a flipbook"""
@@ -121,8 +123,8 @@ class Loop:
                 self.drawNodeBoundWithOffset(nodeBound)
             
             # Draw all the points (e.g. ray origins):
-            for point in self.points:
-                self.drawCircleWithOffset(point)
+            for ray in self.rays:
+                self.drawRayWithOffset(ray)
 
             # 5. Present state:
             pygame.display.flip()
@@ -130,12 +132,21 @@ class Loop:
 
         pygame.quit()
     
-    def drawCircleWithOffset(self, center: Vec2) -> None:
+    def drawRayWithOffset(self, ray: Ray) -> None:
         # First of all converting the logical coordinates to pygame...
-        converted: Vec2 = center * SIMULATION_SCAlAR + self.offset
-        left: int = round(converted.x)
-        top: int = round(converted.y)
-        pygame.draw.circle(self.screen, DEFAULT_CIRCLE_COLOR, (left, top), radius=5)
+        start_point: Vec2 = ray.origin * SIMULATION_SCAlAR + self.offset
+        end_point: Vec2 = ray.direction.normalize() * 2000 + self.offset
+
+        pygame_start_point: VecInt2 = VecInt2(
+            x=round(start_point.x),
+            y=round(start_point.y)
+        )
+        pygame_end_point: VecInt2 = VecInt2(
+            x=round(end_point.x),
+            y=round(end_point.y)
+        )
+        pygame.draw.circle(self.screen, DEFAULT_CIRCLE_COLOR, (pygame_start_point.x, pygame_start_point.y), radius=5)
+        pygame.draw.line(self.screen, DEFAULT_LINE_COLOR, (pygame_start_point.x, pygame_start_point.y), (pygame_end_point.x, pygame_end_point.y), width=5)
 
     def drawObjWithOffset(self, obj: AABB) -> None:
         rect = self.aabbToPygameRect(obj, self.offset)

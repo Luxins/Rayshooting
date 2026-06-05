@@ -1,5 +1,7 @@
 from BasicGeometry.BasicGeometry import AABB, Vec2
 from textwrap import indent
+from dataclasses import dataclass
+from Ray.Ray import RayInterval
 
 class QuadtreeNode:
     myIndex: int = -1
@@ -13,6 +15,9 @@ class QuadtreeNode:
         self.center: Vec2 = center
         self.children = children
         self.objects = objects
+    
+    def isLeaf(self)->bool:
+        return all(child == -1 for child in self.children)
     
     def setChildren(self, children: list[int, int, int, int]):
         self.children = children
@@ -32,3 +37,9 @@ class QuadtreeNode:
     def __str__(self)-> str:
         objects_str: str = "\n\n".join(str(obj) for obj in self.objects[0:min(3, len(self.objects))])
         return f"Node bounds:\n{indent(self.bounds.__str__(), '\t')}\n\nObjects enclosed (sample):\n{indent(objects_str, '\t')}"
+    
+
+@dataclass
+class TraversalItem:
+    node: "QuadtreeNode"
+    interval: RayInterval
