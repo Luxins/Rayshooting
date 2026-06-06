@@ -1,0 +1,8 @@
+depth,rays_compared,visited_count_mismatches,checksum_mismatches,median_extra_quadtree_runtime_ns
+2,10000,0,0,"21,208"
+3,10000,0,0,"41,832"
+4,10000,0,0,"84,479"
+5,10000,0,0,"161,124"
+6,10000,0,0,"318,396"
+7,10000,0,0,"637,146"
+8,10000,0,0,"1,256,792"

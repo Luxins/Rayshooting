@@ -1,5 +1,5 @@
 from BasicGeometry.BasicGeometry import Vec2, AABB
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 
@@ -7,10 +7,9 @@ class Ray:
     def __init__(self, origin=Vec2, direction=Vec2, min_t: float = 0, max_t: float = float('inf')):
         self.origin: Vec2 = origin
         self.direction: Vec2 = direction
-
-        min_t: float = min_t
-        # max_t < float('inf') zu machen, bedeutet man hat ein RaySegment anstatt eine komplette Ray!
-        max_t: float = max_t
+        self.min_t: float = min_t
+        # max_t < infinity means that the ray is used as a finite ray segment.
+        self.max_t: float = max_t
 
     def PointAt(self, t: float)-> Vec2:
         return self.origin + self.direction * t
@@ -147,4 +146,3 @@ def intersect(box: AABB, ray: Ray, rayInterval: RayInterval)-> tuple[bool, RayIn
         )
 
     return True, schnittInterval
-

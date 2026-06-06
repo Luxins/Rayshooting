@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from statistics import mean
 from math import sqrt
+from collections.abc import Sequence
 from typing import Optional
 
 @dataclass
@@ -125,4 +126,22 @@ class AABB:
     def __str__(self)-> str:
         return f"min: [x={self.min.x:.1f} y={self.min.y:.1f}]\nmax: [x={self.max.x:.1f} y={self.max.y:.1f}]"
 
+
+def square_bounds_from_aabb(bounds: AABB) -> AABB:
+    """Return the smallest square AABB with the same center as the input bounds."""
+    width = bounds.max.x - bounds.min.x
+    height = bounds.max.y - bounds.min.y
+    side_length = max(width, height)
+    half_side = side_length / 2
+    center = bounds.center
+
+    return AABB(
+        min=Vec2(center.x - half_side, center.y - half_side),
+        max=Vec2(center.x + half_side, center.y + half_side),
+    )
+
+
+def square_bounds_for_aabbs(boxes: Sequence[AABB]) -> AABB:
+    """Merge boxes and expand the result to square bounds for comparable grids."""
+    return square_bounds_from_aabb(AABB.mergeMany(list(boxes)))
 

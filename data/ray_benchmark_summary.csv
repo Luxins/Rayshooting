@@ -1,0 +1,5 @@
+algorithm,depth,cells_per_axis,num_rays,seed,total_runtime_ns,avg_runtime_ns_per_ray,min_visited_partitions,max_visited_partitions,avg_visited_partitions,total_visited_partitions,avg_runtime_ns_per_visited_partition
+uniform_grid,2,4,100,42,984039,9840.39,1,7,2.85,285,3452.7684210526318
+quadtree,2,4,100,42,3150160,31501.6,1,7,2.85,285,11053.192982456141
+uniform_grid,3,8,100,42,1413915,14139.15,1,15,5.34,534,2647.7808988764045
+quadtree,3,8,100,42,6006754,60067.54,1,15,5.34,534,11248.602996254682

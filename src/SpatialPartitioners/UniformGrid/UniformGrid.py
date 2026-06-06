@@ -1,9 +1,16 @@
-from Ray.Ray import Ray, RayHit, RayInterval
-from BasicGeometry.BasicGeometry import AABB, Vec2
 from dataclasses import dataclass
 import math
 
-@dataclass
+from BasicGeometry.BasicGeometry import (
+    AABB,
+    Vec2,
+    square_bounds_for_aabbs,
+    square_bounds_from_aabb,
+)
+from Ray.Ray import Ray, RayInterval
+
+
+@dataclass(frozen=True)
 class GridCoordinate:
     x: int = 0
     y: int = 0
@@ -11,146 +18,103 @@ class GridCoordinate:
     def __str__(self):
         return f"Grid coordinate x: {self.x} y: {self.y}"
 
+
 @dataclass
 class AxisTraversal:
     step: int
-    t_next_wall: float
-    t_wall_to_wall: float
+    timeToNextWall: float
+    timeBetweenWalls: float
+
 
 def initAxisTraversal(
     originCoord: float,
     directionCoord: float,
     gridMinCoord: float,
     cellIndex: int,
-    cellSideLength: float
+    cellSideLength: float,
 ) -> AxisTraversal:
+    if directionCoord == 0:
+        return AxisTraversal(
+            step=0,
+            timeToNextWall=float("inf"),
+            timeBetweenWalls=float("inf"),
+        )
+
     step = 1 if directionCoord > 0 else -1
-
     nextWallIndex = cellIndex + 1 if step > 0 else cellIndex
-
     nextWallCoord = gridMinCoord + nextWallIndex * cellSideLength
-
-    distanceToNextWall = abs(nextWallCoord - originCoord)
-
-    t_next_wall = distanceToNextWall / abs(directionCoord)
-
-    t_wall_to_wall = cellSideLength / abs(directionCoord)
 
     return AxisTraversal(
         step=step,
-        t_next_wall=t_next_wall,
-        t_wall_to_wall=t_wall_to_wall
+        timeToNextWall=abs(nextWallCoord - originCoord) / abs(directionCoord),
+        timeBetweenWalls=cellSideLength / abs(directionCoord),
     )
 
 
-# TODO: Leaking GridCoordinate to external callers is a bad idea, as they have no way of interpreting it.
-# However, we do not need to store realistic partitions either for the scope of the essay...
 @dataclass
-class VistitedCell:
+class VisitedCell:
     gridCoordinate: GridCoordinate
     rayInterval: RayInterval
 
+
+# Backwards-compatible alias for existing notebooks/scripts that may import the typo.
+VistitedCell = VisitedCell
+
+
 class UniformGrid:
-    def __init__(self, layers: int, objectCloud: list[AABB]):
-        """Using the term layers as a parameter even though the uniform grid is flat. Will match a Quadtree in terms of partition for the same layer argument."""
-        worldBound: AABB = AABB.mergeMany(objectCloud)
-        worldExtendX: float = worldBound.max.x - worldBound.min.x
-        worldExtendY: float = worldBound.max.y - worldBound.min.y
+    def __init__(
+        self,
+        layers: int,
+        objectCloud: list[AABB] | None = None,
+        world_bounds: AABB | None = None,
+    ):
+        """Create a 2D grid with 2^layers cells per axis."""
+        if layers < 0:
+            raise ValueError("layers must be >= 0")
 
-        worldSideLength: float = max(worldExtendX, worldExtendY)
-        self.partitionSideLength: float = worldSideLength / (2**layers)
+        if world_bounds is None:
+            if not objectCloud:
+                raise ValueError("objectCloud or world_bounds is required")
+            world_bounds = square_bounds_for_aabbs(objectCloud)
+        else:
+            world_bounds = square_bounds_from_aabb(world_bounds)
+
+        self.layers: int = layers
+        self.worldBounds: AABB = world_bounds
         self.numPartitionsPerAxis: int = 2**layers
+        self.cells_per_axis: int = self.numPartitionsPerAxis
+        self.partitionSideLength: float = (
+            self.worldBounds.max.x - self.worldBounds.min.x
+        ) / self.numPartitionsPerAxis
+        self.gridUpperLeft: Vec2 = self.worldBounds.min
 
-        self.gridUpperLeft: Vec2 = Vec2(
-            x=worldBound.min.x,
-            y=worldBound.min.y
-        )
-    
-    def worldToGrid(self, p: Vec2)-> GridCoordinate:
-        """This function is crucial for determining what grid cell the origin is in!"""
+    def worldToGrid(self, p: Vec2) -> GridCoordinate:
+        """Map a point inside the grid bounds to its cell coordinate."""
         relativeX: float = p.x - self.gridUpperLeft.x
         relativeY: float = p.y - self.gridUpperLeft.y
 
-        return GridCoordinate(
-            x= math.floor(relativeX / self.partitionSideLength),
-            y=math.floor(relativeY / self.partitionSideLength)
+        # Clamp so points exactly on the square's max boundary still map to
+        # the final cell instead of one-past-the-grid.
+        x = min(
+            max(math.floor(relativeX / self.partitionSideLength), 0),
+            self.numPartitionsPerAxis - 1,
+        )
+        y = min(
+            max(math.floor(relativeY / self.partitionSideLength), 0),
+            self.numPartitionsPerAxis - 1,
         )
 
-    # def rayShoot(self, ray: Ray)-> list[VistitedCell]:
-    #     visitedCells: list[VistitedCell] = []
-    #     # Als erstes möchten wir für den Origin berechnen welche Zellwand mit einem kleineren t erreicht werden kann.
-    #     # Zur vereinfachung nehmen wir erstmal an, dass ray.direction.x/y != 0 (Edge case handling wird später hinzugefügt)
+        return GridCoordinate(x=x, y=y)
 
-    #     cellOfOrigin: GridCoordinate = self.worldToGrid(ray.origin)
-        
-    #     # Messen wir nun die Zeit bis zur nächsten Vertikalen Zellwand.
-    #     # Erstmal müssen wir entscheiden, ob wir gegen die linke oder rechte Zellwand laufen.
-    #     hittingRightWall: bool = True if ray.direction.x > 0 else False
+    def containsCell(self, cell: GridCoordinate) -> bool:
+        return (
+            0 <= cell.x < self.numPartitionsPerAxis
+            and 0 <= cell.y < self.numPartitionsPerAxis
+        )
 
-    #     # Jetzt messen wir die Distanz zwischen der Zellwand und dem Origin:
-    #     distanceToNextVerticalWall: float = None
-    #     # Machen wir dafür erstmal ray.origin relativ zu Grid.upperLeft
-    #     relativeOrigin: Vec2 = ray.origin - self.gridUpperLeft
-    #     if hittingRightWall:
-    #         # Wir können die X-Koordinate der rechten Wall relativ zu grid.upperLeft berechnen:
-    #         nextRightWall: float = (cellOfOrigin.x + 1) * self.partitionSideLength
-    #         # Nun der Abstand zwischen Origin und der Wall:
-    #         distanceToNextVerticalWall = nextRightWall - relativeOrigin.x
-    #     elif not hittingRightWall:
-    #         nextLeftWall: float = cellOfOrigin.x * self.partitionSideLength
-    #         distanceToNextVerticalWall = abs(nextLeftWall - relativeOrigin.x)
-        
-    #     # Wir wiederholen den gleichen Prozess für distanceToNextHorizontalWall
-    #     hittingLowerWall: bool = True if ray.direction.y > 0 else False
-
-    #     distanceToNextHorizontalWall: float = None
-    #     # relativeOrigin kann von oben wiederverwandt werden
-    #     if hittingLowerWall:
-    #         nextLowerWall: float = (cellOfOrigin.y + 1) * self.partitionSideLength
-    #         distanceToNextHorizontalWall = nextLowerWall - relativeOrigin.y
-    #     elif not hittingLowerWall:
-    #         nextUpperWall: float = cellOfOrigin.y * self.partitionSideLength
-    #         distanceToNextHorizontalWall = abs(nextUpperWall - relativeOrigin.y)
-        
-    #     # Wir wissen nun garantiert, dass die Zelle nach folgenden t-Wert verlassen wird:
-    #     tTillNextWall: float = min(distanceToNextVerticalWall, distanceToNextHorizontalWall)
-    #     # Wir können also nun die Zelle als visited speichern, in der sich der Origin befindet
-    #     visitedCells.append(
-    #         VistitedCell(
-    #             gridCoordinate=cellOfOrigin,
-    #             rayInterval=RayInterval(
-    #                 t_enter=0.001,
-    #                 t_exit=tTillNextWall
-    #             )
-    #         )
-    #     )
-        
-    #     # Nun können wir uns etwas bauen, um weitere Iterationen zu vereinfachen:
-    #     # Der Abstand von einer Vertikalen/Horizontalen Zellwand zur nächsten ist immer Konstant.
-    #     # Dementsprechend ist auch die Zeit Konstant, die die Ray benötigt, um von einer Zellwand zur nächsten zur kommen.
-    #     # Lass uns diese Zeit berechenen:
-    #     tVerticalToVertical: float = abs(self.partitionSideLength / ray.direction.x)
-    #     tHorizontalToHorizontal: float = abs(self.partitionSideLength / ray.direction.y)
-
-    #     # Für die Iteration bereiten wir zuerst die Zellkoordinate, der nächsten Zelle vor
-    #     nextCell: GridCoordinate = cellOfOrigin
-    #     if (distanceToNextVerticalWall < distanceToNextHorizontalWall):
-    #         # Dann hat sich der x-Zellenindex geändert.
-    #         nextCell.x += 1 if hittingRightWall else -1
-    #     elif distanceToNextHorizontalWall < distanceToNextVerticalWall:
-    #         # Dann hat isch der y-Zellenindex geändert.
-    #         nextCell.y += 1 if hittingLowerWall else -1
-        
-    #     # Jetzt iterieren wir so lange, bis die Zellenindex in nextCell nicht mehr valide ist.
-    #     while (nextCell.x >= 0 and
-    #            nextCell.y >= 0 and
-    #            nextCell.x < self.numPartitionsPerAxis and
-    #            nextCell.y < self.numPartitionsPerAxis):
-            
-
-                
-    def rayShoot(self, ray: Ray) -> list[VistitedCell]:
-        visitedCells: list[VistitedCell] = []
+    def rayShoot(self, ray: Ray) -> list[VisitedCell]:
+        if not self.worldBounds.containsPoint(ray.origin):
+            return []
 
         currentCell: GridCoordinate = self.worldToGrid(ray.origin)
 
@@ -159,51 +123,66 @@ class UniformGrid:
             directionCoord=ray.direction.x,
             gridMinCoord=self.gridUpperLeft.x,
             cellIndex=currentCell.x,
-            cellSideLength=self.partitionSideLength
+            cellSideLength=self.partitionSideLength,
         )
-
         yTraversal = initAxisTraversal(
             originCoord=ray.origin.y,
             directionCoord=ray.direction.y,
             gridMinCoord=self.gridUpperLeft.y,
             cellIndex=currentCell.y,
-            cellSideLength=self.partitionSideLength
+            cellSideLength=self.partitionSideLength,
         )
 
-        tEnterCurrentCell: float = 0.0
+        stepX: int = xTraversal.step
+        stepY: int = yTraversal.step
+        timeToNextVerticalWall: float = xTraversal.timeToNextWall
+        timeToNextHorizontalWall: float = yTraversal.timeToNextWall
+        timeBetweenVerticalWalls: float = xTraversal.timeBetweenWalls
+        timeBetweenHorizontalWalls: float = yTraversal.timeBetweenWalls
 
-        while (
-            currentCell.x >= 0 and
-            currentCell.y >= 0 and
-            currentCell.x < self.numPartitionsPerAxis and
-            currentCell.y < self.numPartitionsPerAxis
-        ):
-            tExitCurrentCell = min(
-                xTraversal.t_next_wall,
-                yTraversal.t_next_wall
+        enteredCurrentCellAt: float = getattr(ray, "min_t", 0.0)
+        visitedCells: list[VisitedCell] = []
+
+        while self.containsCell(currentCell):
+            leavesCurrentCellAt = min(
+                timeToNextVerticalWall,
+                timeToNextHorizontalWall,
+                getattr(ray, "max_t", float("inf")),
             )
 
             visitedCells.append(
-                VistitedCell(
-                    gridCoordinate=GridCoordinate(
-                        currentCell.x,
-                        currentCell.y
-                    ),
+                VisitedCell(
+                    gridCoordinate=GridCoordinate(currentCell.x, currentCell.y),
                     rayInterval=RayInterval(
-                        t_enter=tEnterCurrentCell,
-                        t_exit=tExitCurrentCell
-                    )
+                        t_enter=enteredCurrentCellAt,
+                        t_exit=leavesCurrentCellAt,
+                    ),
                 )
             )
 
-            if xTraversal.t_next_wall < yTraversal.t_next_wall:
-                currentCell.x += xTraversal.step
-                tEnterCurrentCell = xTraversal.t_next_wall
-                xTraversal.t_next_wall += xTraversal.t_wall_to_wall
+            if leavesCurrentCellAt >= getattr(ray, "max_t", float("inf")):
+                break
 
-            else:
-                currentCell.y += yTraversal.step
-                tEnterCurrentCell = yTraversal.t_next_wall
-                yTraversal.t_next_wall += yTraversal.t_wall_to_wall
+            # Move through the first wall hit by the ray. If a corner is hit
+            # exactly, advance both axes to avoid zero-length loops.
+            crossesVerticalWall = (
+                timeToNextVerticalWall <= timeToNextHorizontalWall
+            )
+            crossesHorizontalWall = (
+                timeToNextHorizontalWall <= timeToNextVerticalWall
+            )
+
+            if not crossesVerticalWall and not crossesHorizontalWall:
+                break
+
+            if crossesVerticalWall:
+                currentCell = GridCoordinate(currentCell.x + stepX, currentCell.y)
+                timeToNextVerticalWall += timeBetweenVerticalWalls
+
+            if crossesHorizontalWall:
+                currentCell = GridCoordinate(currentCell.x, currentCell.y + stepY)
+                timeToNextHorizontalWall += timeBetweenHorizontalWalls
+
+            enteredCurrentCellAt = leavesCurrentCellAt
 
         return visitedCells
