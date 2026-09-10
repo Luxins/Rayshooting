@@ -421,11 +421,6 @@ def plot_ratios(summary_rows):
         (row["algorithm"], row["depth"]): row for row in summary_rows
     }
     depths = sorted({row["depth"] for row in summary_rows})
-    runtime_ratios = [
-        by_algorithm_depth[(TREE, depth)]["avg_runtime_ns_per_ray"]
-        / by_algorithm_depth[(GRID, depth)]["avg_runtime_ns_per_ray"]
-        for depth in depths
-    ]
     per_visit_ratios = [
         by_algorithm_depth[(TREE, depth)]["avg_runtime_ns_per_visited_partition"]
         / by_algorithm_depth[(GRID, depth)]["avg_runtime_ns_per_visited_partition"]
@@ -433,14 +428,6 @@ def plot_ratios(summary_rows):
     ]
 
     fig, ax = plt.subplots(figsize=(8.8, 5.2))
-    ax.plot(
-        depths,
-        runtime_ratios,
-        marker="o",
-        linewidth=2.5,
-        color="#7c3aed",
-        label="Runtime ratio",
-    )
     ax.plot(
         depths,
         per_visit_ratios,
