@@ -37,7 +37,7 @@ pip install -e .
 Run the tests:
 
 ```sh
-python -m unittest
+python -m unittest discover -s tests
 ```
 
 Run the benchmark with the default settings:
